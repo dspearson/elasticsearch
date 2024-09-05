@@ -46,7 +46,7 @@ public class DocVector extends AbstractVector implements Vector {
      */
     private int[] shardSegmentDocMapBackwards;
 
-    final DocBlock block;
+    private DocBlock block;
 
     public DocVector(IntVector shards, IntVector segments, IntVector docs, Boolean singleSegmentNonDecreasing) {
         super(shards.getPositionCount(), null);
@@ -64,7 +64,31 @@ public class DocVector extends AbstractVector implements Vector {
                 "invalid position count [" + shards.getPositionCount() + " != " + docs.getPositionCount() + "]"
             );
         }
-        block = new DocBlock(this);
+    }
+
+    // Builder class for constructing DocVector objects
+    public static class Builder {
+        private final IntVector shards;
+        private final IntVector segments;
+        private final IntVector docs;
+        private Boolean singleSegmentNonDecreasing;
+
+        public Builder(IntVector shards, IntVector segments, IntVector docs) {
+            this.shards = shards;
+            this.segments = segments;
+            this.docs = docs;
+        }
+
+        public Builder singleSegmentNonDecreasing(Boolean singleSegmentNonDecreasing) {
+            this.singleSegmentNonDecreasing = singleSegmentNonDecreasing;
+            return this;
+        }
+
+        public DocVector build() {
+            DocVector docVector = new DocVector(shards, segments, docs, singleSegmentNonDecreasing);
+            docVector.block = new DocBlock(docVector);
+            return docVector;
+        }
     }
 
     public IntVector shards() {
@@ -176,7 +200,12 @@ public class DocVector extends AbstractVector implements Vector {
 
     @Override
     public DocVector filter(int... positions) {
-        return new DocVector(shards.filter(positions), segments.filter(positions), docs.filter(positions), null);
+        return new Builder(
+                shards.filter(positions),
+                segments.filter(positions),
+                docs.filter(positions))
+            .singleSegmentNonDecreasing(singleSegmentNonDecreasing)
+            .build();
     }
 
     @Override
