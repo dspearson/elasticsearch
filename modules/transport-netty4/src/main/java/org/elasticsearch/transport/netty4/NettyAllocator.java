@@ -39,6 +39,7 @@ public class NettyAllocator {
     private static final String DESCRIPTION;
 
     private static final String USE_UNPOOLED = "es.use_unpooled_allocator";
+    private static final String USE_ZGC_POOLED = "es.use_zgc_pooled_allocator";
     private static final String USE_NETTY_DEFAULT = "es.unsafe.use_netty_default_allocator";
     private static final String USE_NETTY_DEFAULT_CHUNK = "es.unsafe.use_netty_default_chunk_and_page_size";
 
@@ -49,6 +50,34 @@ public class NettyAllocator {
             DESCRIPTION = "[name=netty_default, suggested_max_allocation_size="
                 + ByteSizeValue.ofBytes(SUGGESTED_MAX_ALLOCATION_SIZE)
                 + ", factors={es.unsafe.use_netty_default_allocator=true}]";
+        } else if (Booleans.parseBoolean(System.getProperty(USE_ZGC_POOLED), false)) {
+            // ZGC-specific allocator logic
+            int pagesize = 8192;  // Adjust page size for ZGC
+            int maxorder = 6;  // Adjust max order based on needs
+            int smallcachesize = PooledByteBufAllocator.defaultSmallCacheSize();
+            int normalcachesize = PooledByteBufAllocator.defaultNormalCacheSize();
+            boolean usecacheforallthreads = PooledByteBufAllocator.defaultUseCacheForAllThreads();
+
+            PooledByteBufAllocator delegate = new PooledByteBufAllocator(
+                    false,
+                    PooledByteBufAllocator.defaultNumHeapArena(),
+                    0,
+                    pagesize,
+                    maxorder,
+                    smallcachesize,
+                    normalcachesize,
+                    usecacheforallthreads
+            );
+
+            // Calculate chunk size but use dynamic ZGC allocation size
+            int chunksizeinbytes = pagesize << maxorder;
+            // Consider how heap resize affects this
+            SUGGESTED_MAX_ALLOCATION_SIZE = determineZGCMaxAllocation(JvmInfo.jvmInfo().getMem().getHeapMax().getBytes());
+            DESCRIPTION = "[name=zgc, chunk_size=" + ByteSizeValue.ofBytes(chunksizeinbytes)
+                    + ", suggested_max_allocation_size=" + ByteSizeValue.ofBytes(SUGGESTED_MAX_ALLOCATION_SIZE)
+                    + ", factors={es.unsafe.use_zgc_allocator=true}]";
+
+            ALLOCATOR = new NoDirectBuffers(delegate);
         } else {
             final long heapSizeInBytes = JvmInfo.jvmInfo().getMem().getHeapMax().getBytes();
             final boolean g1gcEnabled = Boolean.parseBoolean(JvmInfo.jvmInfo().useG1GC());
@@ -190,6 +219,16 @@ public class NettyAllocator {
             return CopyBytesServerSocketChannel.class;
         } else {
             return NioServerSocketChannel.class;
+        }
+    }
+
+    private static long determineZGCMaxAllocation(long heapSizeInBytes) {
+        if (heapSizeInBytes >= (16L * 1024 * 1024 * 1024)) {
+            return 2 * 1024 * 1024;
+        } else if (heapSizeInBytes >= (8L * 1024 * 1024 * 1024)) {
+            return 1 * 1024 * 1024;
+        } else {
+            return 512 * 1024;
         }
     }
 
