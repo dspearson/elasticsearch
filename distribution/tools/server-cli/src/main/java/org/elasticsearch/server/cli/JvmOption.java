@@ -75,6 +75,11 @@ class JvmOption {
         return initialHeapSize != null && initialHeapSize.isCommandLineOrigin();
     }
 
+    public static boolean isZGCEnabled(final Map<String, JvmOption> finalJvmOptions) {
+        JvmOption useZGC = finalJvmOptions.get("UseZGC");
+        return useZGC != null && useZGC.isCommandLineOrigin();
+    }
+
     public static long extractMaxDirectMemorySize(final Map<String, JvmOption> finalJvmOptions) {
         return Long.parseLong(finalJvmOptions.get("MaxDirectMemorySize").getMandatoryValue());
     }

@@ -29,6 +29,7 @@ import static java.lang.Math.min;
 import static org.elasticsearch.server.cli.JvmOption.isInitialHeapSpecified;
 import static org.elasticsearch.server.cli.JvmOption.isMaxHeapSpecified;
 import static org.elasticsearch.server.cli.JvmOption.isMinHeapSpecified;
+import static org.elasticsearch.server.cli.JvmOption.isZGCEnabled;
 
 /**
  * Determines optimal default heap settings based on available system memory and assigned node roles.
@@ -57,8 +58,8 @@ public final class MachineDependentHeap {
     public List<String> determineHeapSettings(Path configDir, List<String> userDefinedJvmOptions) throws IOException, InterruptedException {
         // TODO: this could be more efficient, to only parse final options once
         final Map<String, JvmOption> finalJvmOptions = JvmOption.findFinalOptions(userDefinedJvmOptions);
-        if (isMaxHeapSpecified(finalJvmOptions) || isMinHeapSpecified(finalJvmOptions) || isInitialHeapSpecified(finalJvmOptions)) {
-            // User has explicitly set memory settings so we use those
+        if (isMaxHeapSpecified(finalJvmOptions) || isMinHeapSpecified(finalJvmOptions) || isInitialHeapSpecified(finalJvmOptions) || isZGCEnabled(finalJvmOptions)) {
+            // User has explicitly set memory settings so we use those, or is using ZGC with automatic heap sizing
             return Collections.emptyList();
         }
 
